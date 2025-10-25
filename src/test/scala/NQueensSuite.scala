@@ -22,13 +22,9 @@ class NQueensSuite extends FunSuite:
     assertEquals(solutions.length, 2)
   }
 
-  test("each 4-queens solution has 4 queens") {
-    val solutions = Choice.run(Board.empty.queens(4)).eval
-    solutions.foreach { board =>
-      // A Board is a Vector[Int] where each element is a queen position
-      // For 4x4 board, we should have 4 queens (4 rows)
-      val boardAsVector = board.asInstanceOf[Vector[Int]]
-      assertEquals(boardAsVector.length, 4)
-    }
+  test("8-queens has 92 solutions") {
+    val solutions = Choice.run(Board.empty.queens(8)).eval
+    // 8-queens has 92 solutions
+    assertEquals(solutions.length, 92)
   }
 end NQueensSuite
