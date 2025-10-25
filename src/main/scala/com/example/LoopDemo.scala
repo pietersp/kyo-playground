@@ -14,13 +14,6 @@ object LoopDemo extends KyoApp:
     )
   )
 
-  val a =
-    for
-      f1 <- Fiber.init(Async.sleep(10.seconds).andThen(Console.printLine("10s done")).andThen(20))
-      f2 <- Fiber.init(Async.sleep(5.seconds).andThen(Console.printLine("5s done")).andThen(f1.interrupt).andThen(20))
-      r  <- f1.block(20.seconds)
-    yield r.getOrElse(42)
-
   def fib(n: Int): BigInt < Any =
     Loop((BigInt(0), BigInt(1), n)) {
       case (a, b, 0) => Loop.done(a)
@@ -44,10 +37,10 @@ object LoopDemo extends KyoApp:
       .run
 
   run {
-    // fibStreamImpl
-    //   .map(Kyo.foreach(_)(Console.printLine))
-    //   .unit
+    fibStreamImpl
+      .map(Kyo.foreach(_)(Console.printLine))
+      .unit
     // progressBar(20)
-    a.map(Console.printLine)
+
   }
 end LoopDemo

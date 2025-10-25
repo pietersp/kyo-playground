@@ -6,6 +6,7 @@ enum SearchState:
   case NoLimit
   case NotYetFound
   case Shortest(value: Int)
+end SearchState
 
 object MazeSolver extends KyoApp:
 
@@ -35,42 +36,45 @@ object MazeSolver extends KyoApp:
     "         E"
   )
 
-  
   opaque type Maze = MazeImpl
-  case class MazeImpl (rowStrings: Chunk[String], start: Position, end: Position)
-  
+  case class MazeImpl(rowStrings: Chunk[String], start: Position, end: Position)
+
   object Maze:
     enum InvalidMaze:
       case InvalidChars
       case StartAbsent
       case EndAbsent
       case MultipleStartsOrEnds
+    end InvalidMaze
 
     private val validChars: Set[Char] = Set(' ', '#', 'S', 'E')
     def apply(rows: Chunk[String]): Maze < Abort[InvalidMaze] =
 
       import InvalidMaze.*
-      def find(charToFind: 'S' | 'E'): Position < Abort[InvalidMaze] = 
-        val pos = for 
-          r <- 0 until rows.length
-          c <- 0 until rows(r).length
-          if rows(r)(c) == charToFind
-        yield Position(r, c)
-        
-        pos.toList match 
-          case Nil => charToFind match 
-            case 'S' => Abort.fail(StartAbsent)
-            case 'E' => Abort.fail(EndAbsent)
+      def find(charToFind: 'S' | 'E'): Position < Abort[InvalidMaze] =
+        val pos =
+          for
+            r <- 0 until rows.length
+            c <- 0 until rows(r).length
+            if rows(r)(c) == charToFind
+          yield Position(r, c)
+
+        pos.toList match
+          case Nil => charToFind match
+              case 'S' => Abort.fail(StartAbsent)
+              case 'E' => Abort.fail(EndAbsent)
           case p :: Nil => p
-          case _ => Abort.fail(MultipleStartsOrEnds)
+          case _        => Abort.fail(MultipleStartsOrEnds)
+        end match
       end find
 
       val allValidChars = rows.flatten.forall(validChars.contains)
-      for 
+      for
         _ <- Abort.unless(allValidChars)(InvalidChars)
         s <- find('S')
         e <- find('E')
       yield MazeImpl(rows, s, e)
+      end for
     end apply
   end Maze
 
@@ -81,7 +85,7 @@ object MazeSolver extends KyoApp:
     def isValid(pos: Position): Boolean = pos.row >= 0 && pos.row < rows && pos.col >= 0 && pos.col < cols && !isWall(pos)
     def isValid(pos: Position, currentPath: Path): Boolean =
       isValid(pos) && !currentPath.contains(pos)
-    def isWall(pos: Position): Boolean  = apply(pos) == '#'
+    def isWall(pos: Position): Boolean = apply(pos) == '#'
     def renderSolution(path: Path): String =
       m.rowStrings.zipWithIndex.map { case (row, r) =>
         row.zipWithIndex.map { case (char, c) =>
@@ -111,25 +115,28 @@ object MazeSolver extends KyoApp:
   opaque type Path = Chunk[Position]
   object Path:
     def apply(position: Position): Path = Chunk(position)
-  
+  end Path
+
   extension (p: Path)
     def findPath(maze: Maze, end: Position): Path < (Choice & Sync & Var[SearchState]) =
       import SearchState.*
-      if p.last == end then 
-        Var.update[SearchState]{ 
-            case _ : NotYetFound.type => Shortest(p.length)
-            case Shortest(length) if p.length < length => Shortest(p.length)
-            case other => other
+      if p.last == end then
+        Var.update[SearchState] {
+          case _: NotYetFound.type                   => Shortest(p.length)
+          case Shortest(length) if p.length < length => Shortest(p.length)
+          case other                                 => other
         }.andThen(p)
       else
-        Var.get[SearchState].map{ 
+        Var.get[SearchState].map {
           case Shortest(shortest) if p.length >= shortest => Choice.drop
-          case _ => 
+          case _ =>
             Choice.evalWith(p.last.allMoves) { next =>
               Choice.dropIf(!maze.isValid(next, p)).andThen:
                 (p.append(next)).findPath(maze, end)
             }
         }
+      end if
+    end findPath
 
     def contains(pos: Position): Boolean = p.contains(pos)
   end extension
