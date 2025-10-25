@@ -1,11 +1,13 @@
 package com.example.choice
 
+import com.example.choice.MazeSolver.Maze
+import com.example.choice.MazeSolver.Position
 import kyo.*
-import munit.FunSuite
+import kyo.test.KyoSpecDefault
+import zio.test.*
 
 /** Tests for the MazeSolver components. */
-class MazeSolverSuite extends FunSuite:
-  import MazeSolver.*
+object MazeSolverSuite extends KyoSpecDefault:
 
   val simpleMaze = Chunk(
     "S  ",
@@ -13,62 +15,44 @@ class MazeSolverSuite extends FunSuite:
     "  E"
   )
 
-  test("Maze construction succeeds with valid input") {
-    val result = Abort.run[Maze.InvalidMaze](Maze(simpleMaze)).eval
-    result match
-      case Result.Success(_) => assert(true)
-      case Result.Failure(_) => fail("Expected success")
-      case Result.Error(_)   => fail("Expected success")
-    end match
-  }
-
-  test("Maze construction fails without start") {
-    val noStart = Chunk("   ", " # ", "  E")
-    val result  = Abort.run[Maze.InvalidMaze](Maze(noStart)).eval
-    result match
-      case Result.Failure(_) => assert(true)
-      case Result.Success(_) => fail("Expected failure")
-      case Result.Error(_)   => fail("Expected failure")
-    end match
-  }
-
-  test("Maze construction fails without end") {
-    val noEnd  = Chunk("S  ", " # ", "   ")
-    val result = Abort.run[Maze.InvalidMaze](Maze(noEnd)).eval
-    result match
-      case Result.Failure(_) => assert(true)
-      case Result.Success(_) => fail("Expected failure")
-      case Result.Error(_)   => fail("Expected failure")
-    end match
-  }
-
-  test("Maze construction fails with invalid characters") {
-    val invalid = Chunk("S  ", " X ", "  E")
-    val result  = Abort.run[Maze.InvalidMaze](Maze(invalid)).eval
-    result match
-      case Result.Failure(_) => assert(true)
-      case Result.Success(_) => fail("Expected failure")
-      case Result.Error(_)   => fail("Expected failure")
-    end match
-  }
-
-  test("Maze construction fails with multiple starts") {
-    val multiStart = Chunk("S  ", " S ", "  E")
-    val result     = Abort.run[Maze.InvalidMaze](Maze(multiStart)).eval
-    result match
-      case Result.Failure(_) => assert(true)
-      case Result.Success(_) => fail("Expected failure")
-      case Result.Error(_)   => fail("Expected failure")
-    end match
-  }
-
-  test("Position allMoves returns 4 directions") {
-    val pos   = Position(5, 5)
-    val moves = pos.allMoves
-    assertEquals(moves.length, 4)
-    assertEquals(moves.contains(Position(4, 5)), true) // up
-    assertEquals(moves.contains(Position(6, 5)), true) // down
-    assertEquals(moves.contains(Position(5, 4)), true) // left
-    assertEquals(moves.contains(Position(5, 6)), true) // right
-  }
+  def spec = suite("MazeSolverSuite")(
+    test("Maze construction succeeds with valid input") {
+      for
+        result <- Abort.run[Maze.InvalidMaze](Maze(simpleMaze))
+      yield assertTrue(result.isSuccess)
+    },
+    test("Maze construction fails without start") {
+      val noStart = Chunk("   ", " # ", "  E")
+      for
+        result <- Abort.run[Maze.InvalidMaze](Maze(noStart))
+      yield assertTrue(result.isFailure)
+    },
+    test("Maze construction fails without end") {
+      val noEnd = Chunk("S  ", " # ", "   ")
+      for
+        result <- Abort.run[Maze.InvalidMaze](Maze(noEnd))
+      yield assertTrue(result.isFailure)
+    },
+    test("Maze construction fails with invalid characters") {
+      val invalid = Chunk("S  ", " X ", "  E")
+      for
+        result <- Abort.run[Maze.InvalidMaze](Maze(invalid))
+      yield assertTrue(result.isFailure)
+    },
+    test("Maze construction fails with multiple starts") {
+      val multiStart = Chunk("S  ", " S ", "  E")
+      for
+        result <- Abort.run[Maze.InvalidMaze](Maze(multiStart))
+      yield assertTrue(result.isFailure)
+    },
+    test("Position allMoves returns 4 directions") {
+      val pos   = Position(5, 5)
+      val moves = pos.allMoves
+      assertTrue(moves.length == 4) &&
+      assertTrue(moves.contains(Position(4, 5))) && // up
+      assertTrue(moves.contains(Position(6, 5))) && // down
+      assertTrue(moves.contains(Position(5, 4))) && // left
+      assertTrue(moves.contains(Position(5, 6)))    // right
+    }
+  )
 end MazeSolverSuite

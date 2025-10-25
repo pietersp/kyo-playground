@@ -1,34 +1,37 @@
 package com.example
 
 import kyo.*
-import munit.FunSuite
+import kyo.test.KyoSpecDefault
+import zio.test.*
 
 /** Tests for the LoopDemo Fibonacci implementation. */
-class LoopDemoSuite extends FunSuite:
+object LoopDemoSuite extends KyoSpecDefault:
 
-  test("fib(0) should return 0") {
-    val result = LoopDemo.fib(0).eval
-    assertEquals(result, BigInt(0))
-  }
-
-  test("fib(1) should return 1") {
-    val result = LoopDemo.fib(1).eval
-    assertEquals(result, BigInt(1))
-  }
-
-  test("fib(10) should return 55") {
-    val result = LoopDemo.fib(10).eval
-    assertEquals(result, BigInt(55))
-  }
-
-  test("fib(20) should return 6765") {
-    val result = LoopDemo.fib(20).eval
-    assertEquals(result, BigInt(6765))
-  }
-
-  test("fib handles large numbers") {
-    val result = LoopDemo.fib(100).eval
-    // Fib(100) = 354224848179261915075
-    assertEquals(result, BigInt("354224848179261915075"))
-  }
+  def spec = suite("LoopDemoSuite")(
+    test("fib(0) should return 0") {
+      for
+        result <- LoopDemo.fib(0)
+      yield assertTrue(result == BigInt(0))
+    },
+    test("fib(1) should return 1") {
+      for
+        result <- LoopDemo.fib(1)
+      yield assertTrue(result == BigInt(1))
+    },
+    test("fib(10) should return 55") {
+      for
+        result <- LoopDemo.fib(10)
+      yield assertTrue(result == BigInt(55))
+    },
+    test("fib(20) should return 6765") {
+      for
+        result <- LoopDemo.fib(20)
+      yield assertTrue(result == BigInt(6765))
+    },
+    test("fib handles large numbers") {
+      for
+        result <- LoopDemo.fib(100)
+      yield assertTrue(result == BigInt("354224848179261915075"))
+    }
+  )
 end LoopDemoSuite
