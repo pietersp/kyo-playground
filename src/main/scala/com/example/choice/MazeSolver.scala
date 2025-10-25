@@ -11,15 +11,28 @@ object MazeSolver extends KyoApp:
 
   private val maze = Chunk(
     "S         ",
-    " ######## ",
-    " ######## ",
-    " ######## ",
-    " ######## ",
-    " ######## ",
-    " ######## ",
-    " ######## ",
-    " ######## ",
-    "      E   "
+    " ## ##### ",
+    " ## ##    ",
+    " ##    ## ",
+    " ## ## ## ",
+    " ## ##    ",
+    " ## ##### ",
+    " #     ## ",
+    " # ### ## ",
+    "   #  E   "
+  )
+
+  private val empty = Chunk(
+    "S         ",
+    "          ",
+    "          ",
+    "          ",
+    "          ",
+    "          ",
+    "          ",
+    "          ",
+    "          ",
+    "         E"
   )
 
   
@@ -129,7 +142,7 @@ object MazeSolver extends KyoApp:
 
   run {
     for
-      m <- Maze(maze).recover(e => Abort.fail(new Exception(s"Maze creation failed: $e")))
+      m <- Maze(empty).recover(e => Abort.fail(new Exception(s"Maze creation failed: $e")))
       _ <- Var.run(SearchState.NotYetFound) {
         Choice.runStream(solveMaze(m))
           .map(m.renderSolution)
