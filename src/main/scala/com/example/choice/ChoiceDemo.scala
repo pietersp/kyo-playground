@@ -1,7 +1,15 @@
 package com.example.choice
+
 import kyo.*
 import kyo.Ansi.*
 
+/** Basic demonstration of the Choice effect.
+  *
+  * Shows how to:
+  *   - Evaluate multiple choices with Choice.evalSeq
+  *   - Filter choices with Choice.dropIf
+  *   - Collect all valid combinations
+  */
 object ChoiceDemo extends KyoApp:
 
   val program =

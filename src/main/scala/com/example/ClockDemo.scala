@@ -2,6 +2,13 @@ package com.example
 
 import kyo.*
 
+/** Demonstrates Clock operations for timing and scheduling.
+  *
+  * Shows how to:
+  *   - Use stopwatches to measure elapsed time
+  *   - Coordinate concurrent fibers with timing
+  *   - Repeat operations at intervals
+  */
 object ClockDemo extends KyoApp:
 
   run {
