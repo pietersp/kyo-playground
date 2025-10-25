@@ -2,10 +2,19 @@ package com.example.choice
 
 import kyo.*
 
+/** Sudoku solver using the Choice effect for backtracking search.
+  *
+  * Demonstrates:
+  *   - Constraint satisfaction with Choice effect
+  *   - Early pruning of invalid choices
+  *   - Systematic exploration of the solution space
+  *   - Pretty-printing with Unicode box drawing characters
+  */
 object SudokuSolver extends KyoApp:
 
   type Grid = Vector[Vector[Int]]
 
+  /** Pretty-prints a Sudoku grid with Unicode box drawing characters. */
   def printGrid(grid: Grid): String =
     val rowSeparator = "├───────┼───────┼───────┤"
     val topBorder    = "┌───────┬───────┬───────┐"
@@ -21,7 +30,19 @@ object SudokuSolver extends KyoApp:
     s"$topBorder\n$gridWithSeparators\n$bottomBorder"
   end printGrid
 
-  // Checks if a number can be placed in a given cell without violating Sudoku rules.
+  /** Checks if a number can be placed in a given cell without violating Sudoku rules.
+    *
+    * @param grid
+    *   the current grid state
+    * @param row
+    *   row index
+    * @param col
+    *   column index
+    * @param num
+    *   the number to check
+    * @return
+    *   true if the placement is valid
+    */
   def isValid(grid: Grid, row: Int, col: Int, num: Int): Boolean =
     !grid(row).contains(num) &&
       !grid.map(_(col)).contains(num) && {
@@ -33,8 +54,16 @@ object SudokuSolver extends KyoApp:
         yield grid(startRow + r)(startCol + c)).contains(num)
       }
 
-  // Uses Kyo's Choice effect to perform a backtracking search for a valid solution.
-  // For each empty cell, it tries all numbers from 1 to 9, dropping invalid choices.
+  /** Solves the Sudoku using backtracking with the Choice effect.
+    *
+    * For each empty cell, tries all numbers from 1 to 9, dropping invalid choices immediately. The Choice effect automatically handles
+    * backtracking.
+    *
+    * @param grid
+    *   the initial puzzle grid (0 represents empty cells)
+    * @return
+    *   all valid solutions
+    */
   def solve(grid: Grid): Grid < Choice =
     val emptyCells =
       for

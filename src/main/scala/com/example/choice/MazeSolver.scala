@@ -2,12 +2,23 @@ package com.example.choice
 
 import kyo.*
 
+/** State tracking for the maze search optimization. */
 enum SearchState:
   case NoLimit
   case NotYetFound
   case Shortest(value: Int)
 end SearchState
 
+/** Demonstrates backtracking maze solving using the Choice effect.
+  *
+  * Features:
+  *   - Opaque types for type-safe domain modeling (Maze, Position, Path)
+  *   - Validated maze construction with error handling
+  *   - Optimized search that tracks shortest path found
+  *   - Visual solution rendering
+  *
+  * The solver explores all possible paths through the maze but prunes paths that exceed the current shortest solution.
+  */
 object MazeSolver extends KyoApp:
 
   private val maze = Chunk(
@@ -37,9 +48,12 @@ object MazeSolver extends KyoApp:
   )
 
   opaque type Maze = MazeImpl
+
+  /** Internal representation of a maze with start and end positions. */
   case class MazeImpl(rowStrings: Chunk[String], start: Position, end: Position)
 
   object Maze:
+    /** Validation errors for maze construction. */
     enum InvalidMaze:
       case InvalidChars
       case StartAbsent
@@ -48,9 +62,19 @@ object MazeSolver extends KyoApp:
     end InvalidMaze
 
     private val validChars: Set[Char] = Set(' ', '#', 'S', 'E')
+
+    /** Constructs a validated Maze from string rows.
+      *
+      * @param rows
+      *   the maze layout as strings
+      * @return
+      *   a Maze or validation errors
+      */
     def apply(rows: Chunk[String]): Maze < Abort[InvalidMaze] =
 
       import InvalidMaze.*
+
+      /** Finds the unique position of 'S' or 'E' in the maze. */
       def find(charToFind: 'S' | 'E'): Position < Abort[InvalidMaze] =
         val pos =
           for
@@ -141,6 +165,10 @@ object MazeSolver extends KyoApp:
     def contains(pos: Position): Boolean = p.contains(pos)
   end extension
 
+  /** Solves the maze using backtracking with optimization.
+    *
+    * Uses Var[SearchState] to track the shortest path found so far, allowing early pruning of longer paths.
+    */
   private def solveMaze(maze: Maze): Path < (Choice & Sync & Var[SearchState]) =
     val start = maze.start
     val end   = maze.end
