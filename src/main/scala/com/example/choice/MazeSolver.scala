@@ -1,7 +1,11 @@
 package com.example.choice
 
 import kyo.*
-import kyo.debug.*
+
+enum SearchState:
+  case NoLimit
+  case NotYetFound
+  case Shortest(value: Int)
 
 object MazeSolver extends KyoApp:
 
@@ -10,12 +14,12 @@ object MazeSolver extends KyoApp:
     " ######## ",
     " ######## ",
     " ######## ",
-    "    E     ",
     " ######## ",
     " ######## ",
     " ######## ",
     " ######## ",
-    "          "
+    " ######## ",
+    "      E   "
   )
 
   
@@ -95,20 +99,29 @@ object MazeSolver extends KyoApp:
   object Path:
     def apply(position: Position): Path = Chunk(position)
   
-
   extension (p: Path)
-    def findPath(maze: Maze, end: Position): Path < (Choice & Sync) =
-      if p.last == end then p
+    def findPath(maze: Maze, end: Position): Path < (Choice & Sync & Var[SearchState]) =
+      import SearchState.*
+      if p.last == end then 
+        Var.update[SearchState]{ 
+            case _ : NotYetFound.type => Shortest(p.length)
+            case Shortest(length) if p.length < length => Shortest(p.length)
+            case other => other
+        }.andThen(p)
       else
-        Choice.evalWith(p.last.allMoves) { next =>
-          Choice.dropIf(!maze.isValid(next, p)).andThen:
-            (p.append(next)).findPath(maze, end)
+        Var.get[SearchState].map{ 
+          case Shortest(shortest) if p.length >= shortest => Choice.drop
+          case _ => 
+            Choice.evalWith(p.last.allMoves) { next =>
+              Choice.dropIf(!maze.isValid(next, p)).andThen:
+                (p.append(next)).findPath(maze, end)
+            }
         }
 
     def contains(pos: Position): Boolean = p.contains(pos)
   end extension
 
-  private def solveMaze(maze: Maze): Path < (Choice & Sync) =
+  private def solveMaze(maze: Maze): Path < (Choice & Sync & Var[SearchState]) =
     val start = maze.start
     val end   = maze.end
     Path(start).findPath(maze, end)
@@ -117,11 +130,13 @@ object MazeSolver extends KyoApp:
   run {
     for
       m <- Maze(maze).recover(e => Abort.fail(new Exception(s"Maze creation failed: $e")))
-      _ <- Choice.runStream(solveMaze(m))
-        .map(m.renderSolution)
-        .map("Solution:\n" + _ + "\n")
-        .map(Console.printLine)
-        .run
+      _ <- Var.run(SearchState.NotYetFound) {
+        Choice.runStream(solveMaze(m))
+          .map(m.renderSolution)
+          .map("Solution:\n" + _ + "\n")
+          .map(Console.printLine)
+          .run
+      }
     yield ()
   }
 end MazeSolver
