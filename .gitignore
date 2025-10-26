@@ -31,3 +31,8 @@ metals.sbt
 .idea
 .idea_modules
 /.worksheet/
+
+# AI
+.copilot
+.gemini
+.serena
