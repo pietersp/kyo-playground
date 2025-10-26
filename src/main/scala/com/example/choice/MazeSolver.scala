@@ -177,7 +177,7 @@ object MazeSolver extends KyoApp:
 
   run {
     for
-      m <- Maze(empty).recover(e => Abort.fail(new Exception(s"Maze creation failed: $e")))
+      m <- Maze(empty).mapAbort(e => new Exception(s"Maze creation failed: $e"))
       _ <- Var.run(SearchState.NotYetFound) {
         Choice.runStream(solveMaze(m))
           .map(m.renderSolution)
