@@ -35,21 +35,19 @@ object QueueDemo extends KyoApp:
 
   def consume(q: Queue[Int]): Unit < Async =
     def loop(): Unit < Async =
-      (Abort.run(q.poll)).map { maybeResult =>
-        maybeResult.getOrElse(Maybe.empty) match
-          case v if v.isEmpty =>
-            q.closed.map { closed =>
-              if !closed then
-                Async.sleep(100.millis).andThen(loop())
-              else
-                Console.printLine("Consumer finished")
-            }
-          case v =>
-            for
-              _ <- Console.printLine(s"Consumed ${v.getOrElse(-1)}")
-              _ <- Async.sleep(200.millis)
-              _ <- loop()
-            yield ()
+      (Abort.run(q.poll)).map {
+        case Result.Success(Present(v)) =>
+          for
+            _ <- Console.printLine(s"Consumed $v")
+            _ <- Async.sleep(200.millis)
+            _ <- loop()
+          yield ()
+        case Result.Success(Absent) =>
+          Async.sleep(100.millis).andThen(loop())
+        case Result.Failure(_: Closed) =>
+          Console.printLine("Consumer finished")
+        case Result.Panic(e) =>
+          Console.printLine(s"Consumer panicked with $e")
       }
     loop()
   end consume
