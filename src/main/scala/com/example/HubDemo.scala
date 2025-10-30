@@ -1,12 +1,14 @@
 package com.example
 
 import kyo.*
+import kyo.Hub.*
 
 /** Demonstrates Hub broadcasting functionality in Kyo.
   *
   * Shows how to:
   *   - Create a Hub for multi-producer, multi-consumer communication
-  *   - Publish messages to multiple subscribers simultaneously
+  *   - Use hub.listen to get a Listener for receiving broadcasted messages
+  *   - Publish messages to multiple listeners simultaneously
   *   - Handle different consumer processing speeds
   *   - Apply backpressure when buffers are full
   *   - Gracefully shutdown the broadcasting system
@@ -20,23 +22,20 @@ object HubDemo extends KyoApp:
       _   <- Console.printLine("Starting HubDemo - News Broadcasting System")
       hub <- Hub.init[NewsArticle](16)
 
-      // Create individual channels for each subscriber (simulating hub subscriptions)
-      techChannel     <- Channel.init[NewsArticle](16)
-      sportsChannel   <- Channel.init[NewsArticle](16)
-      businessChannel <- Channel.init[NewsArticle](16)
-
       // Start multiple news publishers
       techPublisher     <- Fiber.init(publishTechNews(hub))
       sportsPublisher   <- Fiber.init(publishSportsNews(hub))
       businessPublisher <- Fiber.init(publishBusinessNews(hub))
 
-      // Start broadcast distributor that simulates hub behavior
-      broadcaster <- Fiber.init(broadcastDistributor(hub, List(techChannel, sportsChannel, businessChannel)))
+      // Create listeners for each subscriber using hub.listen
+      techListener     <- hub.listen
+      sportsListener   <- hub.listen
+      businessListener <- hub.listen
 
       // Start multiple subscribers with different processing speeds
-      techSubscriber     <- Fiber.init(subscribeToChannel(techChannel, "Tech-Subscriber", 100.millis))
-      sportsSubscriber   <- Fiber.init(subscribeToChannel(sportsChannel, "Sports-Subscriber", 200.millis))
-      businessSubscriber <- Fiber.init(subscribeToChannel(businessChannel, "Business-Subscriber", 300.millis))
+      techSubscriber     <- Fiber.init(subscribeWithListener(techListener, "Tech-Subscriber", 100.millis))
+      sportsSubscriber   <- Fiber.init(subscribeWithListener(sportsListener, "Sports-Subscriber", 200.millis))
+      businessSubscriber <- Fiber.init(subscribeWithListener(businessListener, "Business-Subscriber", 300.millis))
 
       // Let the system run for a while
       _ <- Async.sleep(4.seconds)
@@ -48,17 +47,9 @@ object HubDemo extends KyoApp:
 
       // Wait for hub to finish processing and close it
       _ <- hub.close
-      _ <- Console.printLine("Hub closed, waiting for broadcaster...")
+      _ <- Console.printLine("Hub closed, waiting for subscribers...")
 
-      // Wait for broadcaster to finish
-      _ <- broadcaster.join
-
-      // Close all subscriber channels
-      _ <- techChannel.close
-      _ <- sportsChannel.close
-      _ <- businessChannel.close
-
-      // Wait for all subscribers to complete
+      // Wait for all subscribers to complete (they will automatically complete when hub closes)
       _ <- techSubscriber.join
       _ <- sportsSubscriber.join
       _ <- businessSubscriber.join
@@ -142,52 +133,19 @@ object HubDemo extends KyoApp:
     publishLoop(0)
   end publishBusinessNews
 
-  def broadcastDistributor(hub: Hub[NewsArticle], channels: List[Channel[NewsArticle]]): Unit < Async =
-    // This simulates the hub's broadcasting behavior
-    for
-      _ <- Console.printLine("📡 Starting broadcast distributor")
-      _ <- broadcastLoop(hub, channels)
-      _ <- Console.printLine("📡 Broadcast distributor finished")
-    yield ()
-
-  def broadcastLoop(hub: Hub[NewsArticle], channels: List[Channel[NewsArticle]]): Unit < Async =
-    // Continuously poll the hub and broadcast to all channels
-    for
-      shouldContinue <- hub.closed.map(!_)
-      _ <- if shouldContinue then
-        // Try to get an item from hub (this is a simplified approach)
-        // In a real implementation, hub would have a proper take method
-        // For now, we'll simulate by using a timeout-based approach
-        for
-          _ <- Async.sleep(50.millis) // Polling interval
-          // Broadcast a dummy article to simulate hub behavior
-          _ <- Kyo.foreach(channels) { channel =>
-            // In real implementation, this would be actual hub items
-            // For demo purposes, we're just showing the broadcast pattern
-            Abort.run(channel.offer(NewsArticle("System", "Heartbeat", "system"))).unit
-          }
-          _ <- broadcastLoop(hub, channels)
-        yield ()
-      else
-        Console.printLine("📡 Hub closed, stopping broadcast")
-    yield ()
-  end broadcastLoop
-
-  def subscribeToChannel(channel: Channel[NewsArticle], name: String, processingTime: Duration): Unit < Async =
+  def subscribeWithListener(listener: Listener[NewsArticle], name: String, processingTime: Duration): Unit < Async =
     for
       _ <- Console.printLine(s"🔔 $name started listening for news")
-      stream = channel.streamUntilClosed()
+      // Use the listener to get a stream of articles
+      stream = listener.stream()
       _ <- stream.foreach { article =>
-        if article.category != "system" then // Filter out system heartbeat messages
-          for
-            _ <- Console.printLine(s"📖 $name processing: [${article.category}] ${article.title}")
-            _ <- Async.sleep(processingTime) // Simulate processing time
-            _ <- Console.printLine(s"✅ $name finished: ${article.title}")
-          yield ()
-        else
-          Console.printLine(s"💓 $name: System heartbeat")
+        for
+          _ <- Console.printLine(s"📖 $name processing: [${article.category}] ${article.title}")
+          _ <- Async.sleep(processingTime) // Simulate processing time
+          _ <- Console.printLine(s"✅ $name finished: ${article.title}")
+        yield ()
       }
       _ <- Console.printLine(s"🔚 $name: News stream ended")
     yield ()
-  end subscribeToChannel
+  end subscribeWithListener
 end HubDemo
