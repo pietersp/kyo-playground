@@ -7,105 +7,106 @@ import zio.test.*
 object QueueDemoSuite extends KyoSpecDefault:
 
   def spec = suite("QueueDemoSuite")(
-    test("produce should add items to queue in order") {
+    test("produce should add items to channel in order") {
       for
-        q     <- Queue.init[Int | QueueDemo.Done.type](16)
-        _     <- QueueDemo.produce(q, 5)
-        items <- collectAllItems(q, 5)
+        ch    <- Channel.init[Int](16)
+        _     <- QueueDemo.produce(ch, 5)
+        items <- collectAllItems(ch, 5)
       yield assertTrue(items == List(0, 1, 2, 3, 4))
     },
-    test("produce should send Done signal after all items") {
+    test("produce should close channel after all items") {
       for
-        q          <- Queue.init[Int | QueueDemo.Done.type](16)
-        _          <- QueueDemo.produce(q, 3)
-        items      <- collectAllItems(q, 3)
-        doneSignal <- q.poll
-        isDone = doneSignal match
-          case Present(_: QueueDemo.Done.type) => true
-          case _                               => false
+        ch       <- Channel.init[Int](16)
+        _        <- QueueDemo.produce(ch, 3)
+        items    <- collectAllItems(ch, 3)
+        isClosed <- ch.closed
       yield assertTrue(
-        items == List(0, 1, 2) && isDone
+        items == List(0, 1, 2, 3) && isClosed
       )
     },
     test("produce should handle zero items") {
       for
-        q          <- Queue.init[Int | QueueDemo.Done.type](16)
-        _          <- QueueDemo.produce(q, 0)
-        doneSignal <- q.poll
-        isDone = doneSignal match
-          case Present(_: QueueDemo.Done.type) => true
-          case _                               => false
-      yield assertTrue(isDone)
+        ch       <- Channel.init[Int](16)
+        _        <- QueueDemo.produce(ch, 0)
+        isClosed <- ch.closed
+      yield assertTrue(isClosed)
     },
-    test("consume should process items until Done signal") {
+    test("consume should process items until channel closes") {
       for
-        q     <- Queue.init[Int | QueueDemo.Done.type](16)
-        _     <- q.offer(1)
-        _     <- q.offer(2)
-        _     <- q.offer(3)
-        _     <- q.offer(QueueDemo.Done)
-        fiber <- Fiber.init(QueueDemo.consume(q))
-        _     <- Async.sleep(1.second)
-        _     <- fiber.interrupt
+        ch    <- Channel.init[Int](16)
+        _     <- ch.put(1)
+        _     <- ch.put(2)
+        _     <- ch.put(3)
+        _     <- ch.close
+        fiber <- Fiber.init(QueueDemo.consume(ch, "test-consumer"))
+        _     <- fiber.join // Should complete when channel is closed
       yield assertCompletes
     },
-    test("consume should handle empty queue gracefully") {
+    test("consume should block waiting for items") {
       for
-        q     <- Queue.init[Int | QueueDemo.Done.type](16)
-        fiber <- Fiber.init(QueueDemo.consume(q))
+        ch    <- Channel.init[Int](16)
+        fiber <- Fiber.init(QueueDemo.consume(ch, "test-consumer"))
         _     <- Async.sleep(500.millis)
-        _     <- q.offer(QueueDemo.Done)
-        _     <- Async.sleep(500.millis)
-        _     <- fiber.interrupt
+        _     <- ch.put(1)
+        _     <- Async.sleep(300.millis)
+        _     <- ch.close
+        _     <- fiber.join
       yield assertCompletes
     },
     test("producer and consumer should work together") {
       for
-        q        <- Queue.init[Int | QueueDemo.Done.type](16)
-        producer <- Fiber.init(QueueDemo.produce(q, 5))
-        consumer <- Fiber.init(QueueDemo.consume(q))
+        ch       <- Channel.init[Int](16)
+        producer <- Fiber.init(QueueDemo.produce(ch, 5))
+        consumer <- Fiber.init(QueueDemo.consume(ch, "test-consumer"))
         _        <- producer.join
-        _        <- Async.sleep(2.seconds)
-        _        <- consumer.interrupt
+        _        <- consumer.join
       yield assertCompletes
     },
-    test("queue should handle concurrent operations") {
+    test("multiple consumers should share work from channel") {
       for
-        q         <- Queue.init[Int | QueueDemo.Done.type](32)
-        producer1 <- Fiber.init(QueueDemo.produce(q, 3))
-        _         <- Async.sleep(50.millis)
-        items     <- collectAllItems(q, 3)
-        _         <- producer1.join
-        _         <- q.offer(QueueDemo.Done)
-      yield assertTrue(items.length == 3)
+        ch        <- Channel.init[Int](32)
+        producer  <- Fiber.init(QueueDemo.produce(ch, 10))
+        consumer1 <- Fiber.init(QueueDemo.consume(ch, "consumer-1"))
+        consumer2 <- Fiber.init(QueueDemo.consume(ch, "consumer-2"))
+        _         <- producer.join
+        _         <- consumer1.join
+        _         <- consumer2.join
+      yield assertCompletes
     },
-    test("consume should exit when queue is closed") {
+    test("consume should exit when channel is closed") {
       for
-        q     <- Queue.init[Int | QueueDemo.Done.type](16)
-        fiber <- Fiber.init(QueueDemo.consume(q))
+        ch    <- Channel.init[Int](16)
+        fiber <- Fiber.init(QueueDemo.consume(ch, "test-consumer"))
         _     <- Async.sleep(200.millis)
-        _     <- q.close
-        _     <- Async.sleep(500.millis)
-        _     <- fiber.interrupt
+        _     <- ch.close
+        _     <- fiber.join // Should complete gracefully
       yield assertCompletes
+    },
+    test("closeAwaitEmpty should wait for all items to be consumed") {
+      for
+        ch       <- Channel.init[Int](16)
+        _        <- ch.put(1)
+        _        <- ch.put(2)
+        _        <- ch.put(3)
+        consumer <- Fiber.init(QueueDemo.consume(ch, "test-consumer"))
+        isEmpty  <- ch.closeAwaitEmpty
+        _        <- consumer.join
+      yield assertTrue(isEmpty)
     }
   )
 
-  // Helper function to collect items from queue
+  // Helper function to collect items from channel
   private def collectAllItems(
-      q: Queue[Int | QueueDemo.Done.type],
+      ch: Channel[Int],
       count: Int
   ): List[Int] < (Async & Abort[Closed]) =
     def loop(acc: List[Int], remaining: Int): List[Int] < (Async & Abort[Closed]) =
       if remaining <= 0 then acc.reverse
       else
-        q.poll.map {
-          case Present(v) =>
-            v match
-              case i: Int                 => loop(i :: acc, remaining - 1)
-              case _: QueueDemo.Done.type => acc.reverse
-          case _: Absent =>
-            Async.sleep(50.millis) *> loop(acc, remaining)
+        Abort.run(ch.take).map {
+          case kyo.Result.Success(v: Int)    => loop(v :: acc, remaining - 1)
+          case kyo.Result.Failure(_: Closed) => acc.reverse
+          case _                             => acc.reverse
         }
     loop(List.empty, count)
   end collectAllItems

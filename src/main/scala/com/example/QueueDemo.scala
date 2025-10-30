@@ -4,56 +4,58 @@ import kyo.*
 
 object QueueDemo extends KyoApp:
 
-  case object Done
-
   run {
     for
-      _        <- Console.printLine("Starting QueueDemo")
-      q        <- Queue.init[Int | Done.type](16)
-      producer <- Fiber.init(produce(q, 10))
-      consumer <- Fiber.init(consume(q))
-      _        <- producer.join
-      _        <- consumer.join
-      _        <- q.close
-      _        <- Console.printLine("QueueDemo finished")
+      _        <- Console.printLine("Starting QueueDemo with multiple consumers")
+      ch       <- Channel.init[Int](16)
+      producer <- Fiber.init(produce(ch, 100))
+      // Start multiple consumers - they can work concurrently
+      consumer1 <- Fiber.init(consume(ch, "Consumer-1"))
+      consumer2 <- Fiber.init(consume(ch, "Consumer-2"))
+      consumer3 <- Fiber.init(consume(ch, "Consumer-3"))
+      _         <- producer.join
+      // Wait for all consumers to finish processing
+      _ <- consumer1.join
+      _ <- consumer2.join
+      _ <- consumer3.join
+      _ <- Console.printLine("QueueDemo finished")
     yield ()
   }
 
-  def produce(q: Queue[Int | Done.type], n: Int): Unit < (Async & Abort[Closed]) =
+  def produce(ch: Channel[Int], n: Int): Unit < (Async & Abort[Closed]) =
     def loop(i: Int): Unit < (Async & Abort[Closed]) =
       if i < n then
         for
           _ <- if i == 8 then Console.printLine("Hickup") *> Async.sleep(5.seconds)
           else Console.printLine(s"Producing $i")
-          _ <- q.offer(i)
+          _ <- ch.put(i) // Blocking put - waits if channel is full
           _ <- Async.sleep(10.millis)
           _ <- loop(i + 1)
         yield ()
       else
-        q.offer(Done).unit
+        // Close the channel and wait for it to be empty
+        // This ensures all items are consumed before closing
+        for
+          _ <- Console.printLine("Producer done, waiting for channel to drain...")
+          _ <- ch.closeAwaitEmpty
+          _ <- Console.printLine("Channel drained and closed")
+        yield ()
     loop(0)
   end produce
 
-  def consume(q: Queue[Int | Done.type]): Unit < (Async & Abort[Closed]) =
-    def loop(): Unit < (Async & Abort[Closed]) =
-      Abort.run(q.poll).map {
-        case Result.Success(Present(v)) =>
-          v match
-            case _: Done.type =>
-              Console.printLine("Received Done signal, consumer exiting.")
-            case v: Int =>
-              for
-                _ <- Console.printLine(s"Consumed $v")
-                _ <- Async.sleep(200.millis)
-                _ <- loop()
-              yield ()
-        case Result.Success(_: Absent) =>
-          Async.sleep(100.millis) *>
-            Console.printLine("Queue is empty, waiting...") *>
-            loop()
-        case Result.Failure(_: Closed) =>
-          Console.printLine("Queue is closed, consumer exiting.")
+  def consume(ch: Channel[Int], name: String): Unit < Async =
+    // Use streamUntilClosed which properly handles channel closure
+    // and allows multiple consumers to work concurrently
+    for
+      _ <- Console.printLine(s"$name starting...")
+      stream = ch.streamUntilClosed()
+      _ <- stream.foreach { v =>
+        for
+          _ <- Console.printLine(s"$name consumed $v")
+          _ <- Async.sleep(200.millis) // Simulate processing time
+        yield ()
       }
-    loop()
+      _ <- Console.printLine(s"$name: Channel stream ended, consumer exiting.")
+    yield ()
   end consume
 end QueueDemo
