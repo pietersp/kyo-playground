@@ -14,14 +14,14 @@ object QueueDemoSuite extends KyoSpecDefault:
         items <- collectAllItems(ch, 5)
       yield assertTrue(items == List(0, 1, 2, 3, 4))
     },
-    test("produce should close channel after all items") {
+    test("produce should produce all items without closing channel") {
       for
         ch       <- Channel.init[Int](16)
         _        <- QueueDemo.produce(ch, 3)
         items    <- collectAllItems(ch, 3)
         isClosed <- ch.closed
       yield assertTrue(
-        items == List(0, 1, 2, 3) && isClosed
+        items == List(0, 1, 2) && !isClosed // Producer no longer closes
       )
     },
     test("produce should handle zero items") {
@@ -29,7 +29,7 @@ object QueueDemoSuite extends KyoSpecDefault:
         ch       <- Channel.init[Int](16)
         _        <- QueueDemo.produce(ch, 0)
         isClosed <- ch.closed
-      yield assertTrue(isClosed)
+      yield assertTrue(!isClosed) // Producer doesn't close channel
     },
     test("consume should process items until channel closes") {
       for
@@ -53,12 +53,13 @@ object QueueDemoSuite extends KyoSpecDefault:
         _     <- fiber.join
       yield assertCompletes
     },
-    test("producer and consumer should work together") {
+    test("producer and consumer should work together with awaitChannelDrained") {
       for
         ch       <- Channel.init[Int](16)
         producer <- Fiber.init(QueueDemo.produce(ch, 5))
         consumer <- Fiber.init(QueueDemo.consume(ch, "test-consumer"))
         _        <- producer.join
+        _        <- QueueDemo.awaitChannelDrained(ch)
         _        <- consumer.join
       yield assertCompletes
     },
@@ -69,6 +70,7 @@ object QueueDemoSuite extends KyoSpecDefault:
         consumer1 <- Fiber.init(QueueDemo.consume(ch, "consumer-1"))
         consumer2 <- Fiber.init(QueueDemo.consume(ch, "consumer-2"))
         _         <- producer.join
+        _         <- QueueDemo.awaitChannelDrained(ch)
         _         <- consumer1.join
         _         <- consumer2.join
       yield assertCompletes
@@ -82,16 +84,16 @@ object QueueDemoSuite extends KyoSpecDefault:
         _     <- fiber.join // Should complete gracefully
       yield assertCompletes
     },
-    test("closeAwaitEmpty should wait for all items to be consumed") {
+    test("awaitChannelDrained should wait for all items to be consumed") {
       for
         ch       <- Channel.init[Int](16)
         _        <- ch.put(1)
         _        <- ch.put(2)
         _        <- ch.put(3)
         consumer <- Fiber.init(QueueDemo.consume(ch, "test-consumer"))
-        isEmpty  <- ch.closeAwaitEmpty
+        _        <- QueueDemo.awaitChannelDrained(ch)
         _        <- consumer.join
-      yield assertTrue(isEmpty)
+      yield assertCompletes
     }
   )
 

@@ -14,6 +14,9 @@ object QueueDemo extends KyoApp:
       consumer2 <- Fiber.init(consume(ch, "Consumer-2"))
       consumer3 <- Fiber.init(consume(ch, "Consumer-3"))
       _         <- producer.join
+      _         <- Console.printLine("Producer finished, waiting for channel to drain...")
+      _         <- awaitChannelDrained(ch)
+      _         <- Console.printLine("Channel drained, waiting for consumers...")
       // Wait for all consumers to finish processing
       _ <- consumer1.join
       _ <- consumer2.join
@@ -33,15 +36,19 @@ object QueueDemo extends KyoApp:
           _ <- loop(i + 1)
         yield ()
       else
-        // Close the channel and wait for it to be empty
-        // This ensures all items are consumed before closing
-        for
-          _ <- Console.printLine("Producer done, waiting for channel to drain...")
-          _ <- ch.closeAwaitEmpty
-          _ <- Console.printLine("Channel drained and closed")
-        yield ()
+        Console.printLine("Producer done producing items")
     loop(0)
   end produce
+
+  /** Wait for the channel to drain and then close it. This should be called after the producer is done and while consumers are still
+    * running.
+    */
+  def awaitChannelDrained(ch: Channel[Int]): Unit < Async =
+    for
+      _ <- ch.closeAwaitEmpty
+      _ <- Console.printLine("Channel drained and closed")
+    yield ()
+  end awaitChannelDrained
 
   def consume(ch: Channel[Int], name: String): Unit < Async =
     // Use streamUntilClosed which properly handles channel closure
