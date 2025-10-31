@@ -2,6 +2,7 @@ package com.example
 
 import kyo.*
 import kyo.Hub.*
+import kyo.debug.*
 
 /** Demonstrates Hub broadcasting functionality in Kyo.
   *
@@ -15,12 +16,16 @@ import kyo.Hub.*
   */
 object HubDemo extends KyoApp:
 
-  case class NewsArticle(title: String, content: String, category: String)
+  enum Category:
+    case Technology, Sports, Business
+  end Category
+
+  case class NewsArticle(title: String, content: String, category: Category)
 
   run {
     for
       _   <- Console.printLine("Starting HubDemo - News Broadcasting System")
-      hub <- Hub.init[NewsArticle](16)
+      hub <- Hub.init[NewsArticle](1)
 
       // Start multiple news publishers
       techPublisher     <- Fiber.init(publishTechNews(hub))
@@ -28,124 +33,134 @@ object HubDemo extends KyoApp:
       businessPublisher <- Fiber.init(publishBusinessNews(hub))
 
       // Create listeners for each subscriber using hub.listen
-      techListener     <- hub.listen
-      sportsListener   <- hub.listen
-      businessListener <- hub.listen
+      alice   <- hub.listen(0, _.category.eq(Category.Technology))
+      bob     <- hub.listen(0, _.category.eq(Category.Sports))
+      charles <- hub.listen(0, _.category.eq(Category.Business))
 
       // Start multiple subscribers with different processing speeds
-      techSubscriber     <- Fiber.init(subscribeWithListener(techListener, "Tech-Subscriber", 100.millis))
-      sportsSubscriber   <- Fiber.init(subscribeWithListener(sportsListener, "Sports-Subscriber", 200.millis))
-      businessSubscriber <- Fiber.init(subscribeWithListener(businessListener, "Business-Subscriber", 300.millis))
+      aliceF   <- Fiber.init(subscribeWithListener(alice, "Alice", 500.millis))
+      bobF     <- Fiber.init(subscribeWithListener(bob, "Bob", 800.millis))
+      charlesF <- Fiber.init(subscribeWithListener(charles, "Charles", 1000.millis))
 
       // Let the system run for a while
       _ <- Async.sleep(4.seconds)
 
       // Stop all publishers
+      _ <- Console.printLine("🟦 Stopping all publishers...")
       _ <- techPublisher.interrupt
       _ <- sportsPublisher.interrupt
       _ <- businessPublisher.interrupt
 
       // Wait for hub to finish processing and close it
+      // Check for the hub to be empty before closing. If not wait longer
+      // Wait for hub to be empty before closing
+      _ <- waitUntilEmpty(hub.empty, "Hub")
+      _ <- waitUntilEmpty(alice.empty, "Alice's listener")
+      _ <- waitUntilEmpty(bob.empty, "Bob's listener")
+      _ <- waitUntilEmpty(charles.empty, "Charles' listener")
+
+      // _ <- waitForListenersToBeEmpty(alice, bob, charles)
       _ <- hub.close
-      _ <- Console.printLine("Hub closed, waiting for subscribers...")
 
       // Wait for all subscribers to complete (they will automatically complete when hub closes)
-      _ <- techSubscriber.join
-      _ <- sportsSubscriber.join
-      _ <- businessSubscriber.join
+      _ <- aliceF.join
+      _ <- bobF.join
+      _ <- charlesF.join
 
-      _ <- Console.printLine("HubDemo completed successfully")
+      _ <- Console.printLine("🟦 HubDemo completed successfully")
     yield ()
   }
 
-  def publishTechNews(hub: Hub[NewsArticle]): Unit < (Async & Abort[Closed]) =
-    val articles = List(
-      NewsArticle("AI Breakthrough", "New AI model achieves human-level performance", "technology"),
-      NewsArticle("Quantum Computing", "IBM achieves 1000-qubit milestone", "technology"),
-      NewsArticle("Space Tech", "SpaceX launches satellite constellation", "technology"),
-      NewsArticle("Cybersecurity", "New zero-day vulnerability discovered", "technology"),
-      NewsArticle("Mobile Tech", "Latest smartphone features revolutionary camera", "technology")
-    )
+  def waitUntilEmpty[S](eff: Boolean < S, name: String): Unit < (Async & S) =
+    eff
+      .delay(10.millis)
+      .repeatUntil(_ == true)
+      .andThen(Console.printLine(s"🚪 $name is now closed."))
+      .unit
 
+  def waitForListenersToBeEmpty(listeners: Listener[NewsArticle]*): Unit < (Abort[Closed] & Async) =
+    Console.printLine("🟦 Checking if listeners are empty...")
+      .delay(100.millis)
+      .repeatUntil(_ => Kyo.foreach(listeners)(_.empty).map(_.forall(_ == true)))
+      .andThen(Console.printLine("🟦 All listeners are now empty."))
+  end waitForListenersToBeEmpty
+
+  def publish(
+      hub: Hub[NewsArticle],
+      articles: List[NewsArticle],
+      publisherName: String,
+      delay: Duration
+  ): Unit < (Async & Abort[Closed]) =
     def publishLoop(index: Int): Unit < (Async & Abort[Closed]) =
       if index < articles.size then
         val article = articles(index)
         for
-          _ <- Console.printLine(s"📰 Tech Publisher: ${article.title}")
-          _ <- hub.offer(article)
-          _ <- Async.sleep(400.millis)
+          _ <- Console.printLine(s"$publisherName: ${article.title}")
+          _ <- Abort.run(hub.put(article))
+          _ <- Async.sleep(delay)
           _ <- publishLoop(index + 1)
         yield ()
         end for
       else
         // Continue cycling through articles
-        Async.sleep(800.millis) *> publishLoop(0)
+        Async.sleep(delay * 2) *> publishLoop(0)
 
     publishLoop(0)
+  end publish
+
+  def publishTechNews(hub: Hub[NewsArticle]): Unit < (Async & Abort[Closed]) =
+    val articles = List(
+      NewsArticle("AI Breakthrough", "New AI model achieves human-level performance", Category.Technology),
+      NewsArticle("Quantum Computing", "IBM achieves 1000-qubit milestone", Category.Technology),
+      NewsArticle("Space Tech", "SpaceX launches satellite constellation", Category.Technology),
+      NewsArticle("Cybersecurity", "New zero-day vulnerability discovered", Category.Technology),
+      NewsArticle("Mobile Tech", "Latest smartphone features revolutionary camera", Category.Technology)
+    )
+    publish(hub, articles, "🖥️ Tech Publisher", 40.millis)
   end publishTechNews
 
   def publishSportsNews(hub: Hub[NewsArticle]): Unit < (Async & Abort[Closed]) =
     val articles = List(
-      NewsArticle("Championship Finals", "Team wins in overtime thriller", "sports"),
-      NewsArticle("Olympic Records", "New world records set in swimming", "sports"),
-      NewsArticle("Transfer News", "Star player signs multi-year deal", "sports"),
-      NewsArticle("Tournament Update", "Underdog team advances to semifinals", "sports")
+      NewsArticle("Championship Finals", "Team wins in overtime thriller", Category.Sports),
+      NewsArticle("Championship Finals", "Team wins in overtime thriller", Category.Sports),
+      NewsArticle("Championship Finals", "Team wins in overtime thriller", Category.Sports),
+      NewsArticle("Championship Finals", "Team wins in overtime thriller", Category.Sports)
     )
 
-    def publishLoop(index: Int): Unit < (Async & Abort[Closed]) =
-      if index < articles.size then
-        val article = articles(index)
-        for
-          _ <- Console.printLine(s"⚽ Sports Publisher: ${article.title}")
-          _ <- hub.offer(article)
-          _ <- Async.sleep(600.millis)
-          _ <- publishLoop(index + 1)
-        yield ()
-        end for
-      else
-        Async.sleep(1000.millis) *> publishLoop(0)
-
-    publishLoop(0)
+    publish(hub, articles, "⚽ Sports Publisher", 30.millis)
   end publishSportsNews
 
   def publishBusinessNews(hub: Hub[NewsArticle]): Unit < (Async & Abort[Closed]) =
     val articles = List(
-      NewsArticle("Market Rally", "Stock market reaches all-time high", "business"),
-      NewsArticle("Tech IPO", "Tech company goes public with strong debut", "business"),
-      NewsArticle("Economic Data", "GDP growth exceeds expectations", "business"),
-      NewsArticle("Corporate Merger", "Major acquisition announced", "business"),
-      NewsArticle("Startup Funding", "Startup raises Series B funding", "business")
+      NewsArticle("Market Rally", "Stock market reaches all-time high", Category.Business),
+      NewsArticle("Market Rally", "Stock market reaches all-time high", Category.Business),
+      NewsArticle("Market Rally", "Stock market reaches all-time high", Category.Business),
+      NewsArticle("Market Rally", "Stock market reaches all-time high", Category.Business),
+      NewsArticle("Market Rally", "Stock market reaches all-time high", Category.Business)
     )
 
-    def publishLoop(index: Int): Unit < (Async & Abort[Closed]) =
-      if index < articles.size then
-        val article = articles(index)
-        for
-          _ <- Console.printLine(s"💼 Business Publisher: ${article.title}")
-          _ <- hub.offer(article)
-          _ <- Async.sleep(500.millis)
-          _ <- publishLoop(index + 1)
-        yield ()
-        end for
-      else
-        Async.sleep(900.millis) *> publishLoop(0)
-
-    publishLoop(0)
+    publish(hub, articles, "🏦 Business Publisher", 50.millis)
   end publishBusinessNews
 
-  def subscribeWithListener(listener: Listener[NewsArticle], name: String, processingTime: Duration): Unit < Async =
-    for
-      _ <- Console.printLine(s"🔔 $name started listening for news")
-      // Use the listener to get a stream of articles
-      stream = listener.stream()
-      _ <- stream.foreach { article =>
-        for
-          _ <- Console.printLine(s"📖 $name processing: [${article.category}] ${article.title}")
-          _ <- Async.sleep(processingTime) // Simulate processing time
-          _ <- Console.printLine(s"✅ $name finished: ${article.title}")
-        yield ()
-      }
-      _ <- Console.printLine(s"🔚 $name: News stream ended")
-    yield ()
+  def subscribeWithListener(
+      listener: Listener[NewsArticle],
+      name: String,
+      processingTime: Duration
+  ): Unit < (Abort[Closed] & Async) =
+    import Result.*
+
+    Console.printLine(s"🔔 $name started listening for news") *>
+      Abort.run(listener.take)
+        .map(_.foldOrThrow(
+          onSuccess = a =>
+            Console.printLine(s"  📖 $name processing: [${a.category}] ${a.title}") *>
+              Async.sleep(processingTime) *> // Simulate processing time
+              Console.printLine(s"  ✅ $name finished: ${a.title}") *>
+              true,
+          onFailure = _ => false
+        ))
+        .repeatUntil(_ == false)
+        .unit
+
   end subscribeWithListener
 end HubDemo

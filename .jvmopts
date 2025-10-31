@@ -1,2 +1,3 @@
 -Xmx24G
 -Xms1G
+-Xss16M

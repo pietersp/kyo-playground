@@ -16,7 +16,7 @@ object HubDemoSuite extends KyoSpecDefault:
     test("Hub should accept articles via offer") {
       for
         hub <- Hub.init[HubDemo.NewsArticle](16)
-        article = HubDemo.NewsArticle("Test", "Test content", "test")
+        article = HubDemo.NewsArticle("Test", "Test content", HubDemo.Category.Technology)
         result <- Abort.run(hub.offer(article))
       yield assertTrue(result.isSuccess)
     },
@@ -69,8 +69,8 @@ object HubDemoSuite extends KyoSpecDefault:
         listener <- hub.listen
 
         // Add some test articles
-        article1 = HubDemo.NewsArticle("Test 1", "Content 1", "test")
-        article2 = HubDemo.NewsArticle("Test 2", "Content 2", "test")
+        article1 = HubDemo.NewsArticle("Test 1", "Content 1", HubDemo.Category.Technology)
+        article2 = HubDemo.NewsArticle("Test 2", "Content 2", HubDemo.Category.Sports)
         _ <- hub.offer(article1)
         _ <- hub.offer(article2)
 
@@ -105,7 +105,7 @@ object HubDemoSuite extends KyoSpecDefault:
         listener2 <- hub.listen
 
         // Add test articles
-        article = HubDemo.NewsArticle("Test", "Content", "test")
+        article = HubDemo.NewsArticle("Test", "Content", HubDemo.Category.Business)
         _ <- hub.offer(article)
 
         // Run subscribers briefly
@@ -122,11 +122,11 @@ object HubDemoSuite extends KyoSpecDefault:
       yield assertCompletes
     },
     test("NewsArticle should be created correctly") {
-      val article = HubDemo.NewsArticle("Title", "Content", "Category")
+      val article = HubDemo.NewsArticle("Title", "Content", HubDemo.Category.Technology)
       assertTrue(
         article.title == "Title" &&
           article.content == "Content" &&
-          article.category == "Category"
+          article.category.eq(HubDemo.Category.Technology)
       )
     },
     test("Multiple publishers should work concurrently") {
@@ -172,9 +172,9 @@ object HubDemoSuite extends KyoSpecDefault:
 
         // Add test articles
         articles = List(
-          HubDemo.NewsArticle("Tech News", "New AI breakthrough", "technology"),
-          HubDemo.NewsArticle("Sports News", "Team wins championship", "sports"),
-          HubDemo.NewsArticle("Business News", "Stock market rally", "business")
+          HubDemo.NewsArticle("Tech News", "New AI breakthrough", HubDemo.Category.Technology),
+          HubDemo.NewsArticle("Sports News", "Team wins championship", HubDemo.Category.Sports),
+          HubDemo.NewsArticle("Business News", "Stock market rally", HubDemo.Category.Business)
         )
 
         // Publish articles
