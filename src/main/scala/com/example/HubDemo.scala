@@ -122,9 +122,9 @@ object HubDemo extends KyoApp:
   def publishSportsNews(hub: Hub[NewsArticle]): Unit < (Async & Abort[Closed]) =
     val articles = List(
       NewsArticle("Championship Finals", "Team wins in overtime thriller", Category.Sports),
-      NewsArticle("Championship Finals", "Team wins in overtime thriller", Category.Sports),
-      NewsArticle("Championship Finals", "Team wins in overtime thriller", Category.Sports),
-      NewsArticle("Championship Finals", "Team wins in overtime thriller", Category.Sports)
+      NewsArticle("Formula 1 Race", "Fastest car wins", Category.Sports),
+      NewsArticle("Golf tournament postponed", "Bad weather fouls game", Category.Sports),
+      NewsArticle("Rugby drama", "Men tackle too hard", Category.Sports)
     )
 
     publish(hub, articles, "⚽ Sports Publisher", 30.millis)
@@ -133,10 +133,10 @@ object HubDemo extends KyoApp:
   def publishBusinessNews(hub: Hub[NewsArticle]): Unit < (Async & Abort[Closed]) =
     val articles = List(
       NewsArticle("Market Rally", "Stock market reaches all-time high", Category.Business),
-      NewsArticle("Market Rally", "Stock market reaches all-time high", Category.Business),
-      NewsArticle("Market Rally", "Stock market reaches all-time high", Category.Business),
-      NewsArticle("Market Rally", "Stock market reaches all-time high", Category.Business),
-      NewsArticle("Market Rally", "Stock market reaches all-time high", Category.Business)
+      NewsArticle("xAI makes huge profit", "House robot is a hit", Category.Business),
+      NewsArticle("Vibecoders in dispair", "New law against writing shit code is here", Category.Business),
+      NewsArticle("Cities are busy", "New report surprizes no one", Category.Business),
+      NewsArticle("This poll will shock you", "People prefer having money", Category.Business)
     )
 
     publish(hub, articles, "🏦 Business Publisher", 50.millis)
